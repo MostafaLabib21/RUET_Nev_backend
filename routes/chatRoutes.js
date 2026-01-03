@@ -1,8 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const Teacher = require('../models/Teacher'); // Adjust path to your Teacher model
-const Location = require('../models/Location'); // Adjust path to your Location model
+
+// Import All Database Models
+const Teacher = require('../models/Teacher'); 
+const Location = require('../models/Location'); 
+const BusSchedule = require('../models/BusSchedule'); 
+const KnowledgeBase = require('../models/KnowledgeBase');
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -11,50 +15,81 @@ router.post('/', async (req, res) => {
   const { message } = req.body;
 
   try {
-    // 1. Fetch Data from your Database
-    // We fetch just the text fields to keep payload light
-    const teachers = await Teacher.find({}).select('name designation department roomNumber email phone building');
-    const locations = await Location.find({}).select('name category description roomNumber');
+    // 1. Fetch Data from ALL Database Tables
+    // Removed latitude/longitude from selection
+    const [teachers, locations, buses, knowledge] = await Promise.all([
+      Teacher.find({}).select('name designation department roomNumber email phone building'),
+      Location.find({}).select('name category description roomNumber'), 
+      BusSchedule.find({}),
+      KnowledgeBase.find({})
+    ]);
 
-    // 2. Create a "Context String" for the AI
-    // This tells the AI what knowledge it has access to.
+    // 2. Format Data for the AI "Brain"
+    
+    // Format Bus Data
+    const busText = buses.map(b => 
+      `- ${b.busNumber}: ${b.route} (Up: ${b.upTime}, Down: ${b.downTime}). Active: ${b.activeDays}`
+    ).join('\n');
+
+    // Format General Knowledge
+    const knowledgeText = knowledge.map(k => 
+      `- [${k.topic}] Q: ${k.question} A: ${k.answer}`
+    ).join('\n');
+
+    // Format Teacher Data
+    const teacherText = teachers.map(t => 
+      `- ${t.name} (${t.designation}, ${t.department}): Room ${t.roomNumber} at ${t.building}. Phone: ${t.phone || 'N/A'}`
+    ).join('\n');
+
+    // Format Location Data (Cleaner text only)
+    const locationText = locations.map(l => 
+      `- ${l.name} (${l.category}): ${l.description || ''}`
+    ).join('\n');
+
+    // 3. Construct the Master Context Prompt
     const context = `
-      You are a helpful University Campus Assistant, built for RUET.
-      If a student sends greeting messages, respond politely and ask how you can assist them.
-      If a student asks who built you,respond that you were built by Mostafa Labib.(CSE-21)
+      You are the "RUET Navigator AI", the campus assistant for Rajshahi University of Engineering & Technology.
+      Your Goal: Help students find information using ONLY the database below.
+      Tone: Friendly, concise, and professional.
       
-      Answer the student's question based ONLY on the following database.
+      === LIVE DATABASE ===
       
-      FACULTY LIST:
-      ${teachers.map(t => `- ${t.name} (${t.designation}, ${t.department}): Room ${t.roomNumber} at ${t.building}. Email: ${t.email}`).join('\n')}
-      
-      LOCATIONS LIST:
-      ${locations.map(l => `- ${l.name} (${l.category}): ${l.description || ''}`).join('\n')}
+      [GENERAL KNOWLEDGE & HISTORY]
+      ${knowledgeText}
 
-      If the answer is not in this list, say "I'm sorry, I don't have that information in my database."
+      [BUS SCHEDULE]
+      ${busText}
+      
+      [FACULTY LIST]
+      ${teacherText}
+      
+      [LOCATIONS]
+      ${locationText}
+      
+      === END OF DATA ===
+
+      INSTRUCTIONS:
+      1. Search the [GENERAL KNOWLEDGE] section first for questions about history, the creator (Mostafa Labib), or campus rules.
+      2. If asked about a location, provide the description clearly.
+      3. For buses, always mention the "Up" (Morning) and "Down" (Return) times.
+      4. If the answer is not in the data above, politely say: "I apologize, but I don't have that specific information in my database yet."
+
+      User Question: ${message}
+      Answer:
     `;
 
-    // 3. Call the AI
-    //  CORRECT (Lowercase, no spaces)
-    // Change this:
-// const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-// To this (The specific stable version):
-  //  CORRECT (High limits, fast, and on your available list)
-    //  Backup option from your specific list
-    //  This alias points to the standard, stable Flash model (15 requests/min)
-    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-    const prompt = `${context}\n\nStudent Question: ${message}\nAnswer:`;
-
-    const result = await model.generateContent(prompt);
+    // 4. Call the AI
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
+    const result = await model.generateContent(context);
     const response = await result.response;
     const text = response.text();
 
     res.json({ reply: text });
 
   } catch (error) {
-    console.error('AI Error:', error);
-    res.status(500).json({ reply: "I'm having trouble connecting to the brain right now. Please try again." });
+    console.error('AI Brain Error:', error);
+    res.status(500).json({ reply: "My brain is currently overloaded. Please try again in a moment." });
   }
 });
 
