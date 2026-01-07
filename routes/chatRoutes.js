@@ -7,6 +7,7 @@ const Teacher = require('../models/Teacher');
 const Location = require('../models/Location'); 
 const BusSchedule = require('../models/BusSchedule'); 
 const KnowledgeBase = require('../models/KnowledgeBase');
+const vacations = require('../models/Vacations');
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -45,6 +46,10 @@ router.post('/', async (req, res) => {
     const locationText = locations.map(l => 
       `- ${l.name} (${l.category}): ${l.description || ''}`
     ).join('\n');
+    
+    const vacationText = vacations.map(v => 
+      `- ${v.date}: ${v.occasion} (${v.occasion_en})${v.isMoonDependent ? ' *' : ''}${v.isClassOffOnly ? ' **' : ''}`
+    ).join('\n');
 
     // 3. Construct the Master Context Prompt
     const context = `
@@ -65,7 +70,10 @@ router.post('/', async (req, res) => {
       
       [LOCATIONS]
       ${locationText}
-      
+      [VACATIONS]
+      ${vacationText}
+      * Date varies based on lunar calendar.
+      ** Classes are off, but offices may be open.
       === END OF DATA ===
 
       INSTRUCTIONS:
