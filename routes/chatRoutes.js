@@ -81,7 +81,7 @@ router.post('/', async (req, res) => {
       2. If asked about a location, provide the description clearly.
       3. For buses, always mention the "Up" (Morning) and "Down" (Return) times.
       4. If the answer is not in the data above, politely say: "I apologize, but I don't have that specific information in my database yet."
-
+      5.If asked about vacations,then also provide the vacation's occasion in Bangla.
       User Question: ${message}
       Answer:
     `;
