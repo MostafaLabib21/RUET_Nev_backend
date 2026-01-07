@@ -18,11 +18,12 @@ router.post('/', async (req, res) => {
   try {
     // 1. Fetch Data from ALL Database Tables
     // Removed latitude/longitude from selection
-    const [teachers, locations, buses, knowledge] = await Promise.all([
+    const [teachers, locations, buses, knowledge, vacationsData] = await Promise.all([
       Teacher.find({}).select('name designation department roomNumber email phone building'),
       Location.find({}).select('name category description roomNumber'), 
       BusSchedule.find({}),
-      KnowledgeBase.find({})
+      KnowledgeBase.find({}),
+      vacations.find({})
     ]);
 
     // 2. Format Data for the AI "Brain"
@@ -47,10 +48,9 @@ router.post('/', async (req, res) => {
       `- ${l.name} (${l.category}): ${l.description || ''}`
     ).join('\n');
     
-    const vacationText = vacations.map(v => 
+    const vacationText = vacationsData.map(v => 
       `- ${v.date}: ${v.occasion} (${v.occasion_en})${v.isMoonDependent ? ' *' : ''}${v.isClassOffOnly ? ' **' : ''}`
     ).join('\n');
-
     // 3. Construct the Master Context Prompt
     const context = `
       You are the "RUET Navigator AI", the campus assistant for Rajshahi University of Engineering & Technology.
