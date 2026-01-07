@@ -79,7 +79,7 @@ router.post('/', async (req, res) => {
     `;
 
     // 4. Call the AI
-   const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
     
     const result = await model.generateContent(context);
     const response = await result.response;
